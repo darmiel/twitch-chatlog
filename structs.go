@@ -33,6 +33,14 @@ type Message struct {
 	Channel *Channel
 }
 
+func (m *Message) String() string {
+	var mod string
+	if m.Mod {
+		mod = "🚨 "
+	}
+	return fmt.Sprintf("(%s) %s[%s]: %s", m.Channel.Name, mod, m.Author.Name, m.Body)
+}
+
 type ListeningChannel struct {
 	ChannelName string `gorm:"primaryKey"`
 	Active      bool   `gorm:"default:true"`

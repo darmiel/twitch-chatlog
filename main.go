@@ -10,6 +10,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,10 @@ import (
 func main() {
 	defHandler := clilog.Default
 	log.SetHandler(defHandler)
+
+	// TODO: Debug
+	log.SetLevel(log.DebugLevel)
+	var mu sync.Mutex
 
 	// load config
 	var config *Config
@@ -74,6 +79,17 @@ func main() {
 		return
 	}
 
+	// load channels to listen messages
+	var channels []*ListeningChannel
+	if tx := db.Where("active = true").Find(&channels); tx.Error != nil {
+		log.WithError(tx.Error).Error("retrieving listening channels failed")
+		return
+	}
+	if len(channels) == 0 {
+		log.Error("no channels to listen")
+		return
+	}
+
 	log.Info("Connecting to IRC ...")
 	conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
 	if err != nil {
@@ -96,9 +112,18 @@ func main() {
 				}
 
 				// join channels
-				// TODO: Join channels
-				if err = client.Write("JOIN #unsympathisch_tv"); err != nil {
-					log.WithError(err).Error("error joining channel")
+				for i, c := range channels {
+					if (i+1)%10 == 0 {
+						time.Sleep(11 * time.Second)
+					}
+					if err = client.Write("JOIN #" + c.ChannelName); err != nil {
+						log.WithError(err).
+							WithField("channel", c.ChannelName).
+							Error("error joining channel")
+					} else {
+						log.WithField("channel", c.ChannelName).
+							Info("joined channel")
+					}
 				}
 			} else if message.Command == "PRIVMSG" {
 				// meta data
@@ -112,11 +137,62 @@ func main() {
 					log.WithError(tx.Error).Error("Failed to save chat message")
 					return
 				}
-				log.Infof("[Chat] Saved message: %+v (%v rows affected)", msg, tx.RowsAffected)
+				log.WithField("rows affected", tx.RowsAffected).
+					Debugf("💾 %s", msg.String())
 			}
 		}),
 	}
 	client := irc.NewClient(conn, ic)
+
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			log.Debug("checking for new channels to listen")
+
+			var next []*ListeningChannel
+			if tx := db.Where("active = true").Find(&next); tx.Error != nil {
+				log.WithError(tx.Error).Error("retrieving listening channels failed")
+				return
+			}
+			join, leave := CompareArrays(channels, next)
+
+			mu.Lock()
+			channels = next
+			mu.Unlock()
+
+			// TODO: remove duplicate
+			for i, c := range join {
+				if (i+1)%10 == 0 {
+					log.Debug("waiting 11 seconds")
+					time.Sleep(11 * time.Second)
+				}
+				if err := client.Write("JOIN #" + c.ChannelName); err != nil {
+					log.WithError(err).
+						WithField("channel", c.ChannelName).
+						Error("error joining (guard)")
+				} else {
+					log.WithField("channel", c.ChannelName).
+						Info("joined channel (guard)")
+				}
+			}
+
+			for i, c := range leave {
+				if (i+1)%10 == 0 {
+					log.Debug("waiting 11 seconds")
+					time.Sleep(11 * time.Second)
+				}
+				if err := client.Write("PART #" + c.ChannelName); err != nil {
+					log.WithError(err).
+						WithField("channel", c.ChannelName).
+						Error("error leaving channel (guard)")
+				} else {
+					log.WithField("channel", c.ChannelName).
+						Info("left channel (guard)")
+				}
+			}
+		}
+	}()
+
 	if err = client.Run(); err != nil {
 		panic(err)
 	}
