@@ -1,0 +1,6 @@
+postgres_host = "localhost"
+postgres_user = "postgres"
+postgres_pass = "123456"
+postgres_db = "postgres"
+postgres_port = "45433"
+postgres_tz = "Europe/Berlin"
