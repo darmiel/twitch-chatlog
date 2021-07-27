@@ -9,3 +9,5 @@ TwitchNick = "justinfan30316"
 TwitchUser = "justinfan30316"
 TwitchName = "justinfan30316"
 TwitchPass = "justinfan30316"
+
+SentryDSN = ""

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"gopkg.in/irc.v3"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -53,6 +52,8 @@ type Config struct {
 	TwitchUser string
 	TwitchName string
 	TwitchPass string
+	//
+	SentryDSN string
 }
 
 ///
@@ -104,11 +105,6 @@ func ParseIRCMessage(msg *irc.Message) (*Message, error) {
 		return nil, fmt.Errorf("mod was empty for body '%v' by %v", body, userName)
 	}
 	isMod = modstr == "1"
-
-	// DEBUG: REMOVE ME
-	if strings.HasPrefix(strings.ToLower(userName), "a") {
-		return nil, fmt.Errorf("test error (username starts with a)")
-	}
 
 	return &Message{
 		ID:       messageID,

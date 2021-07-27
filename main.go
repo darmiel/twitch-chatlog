@@ -5,17 +5,19 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/apex/log"
 	clilog "github.com/apex/log/handlers/cli"
+	"github.com/getsentry/sentry-go"
 	"gopkg.in/irc.v3"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"net"
+	"time"
 )
 
 ///
 
 func main() {
-	// Apex Logger CLI Handler
-	log.SetHandler(clilog.Default)
+	defHandler := clilog.Default
+	log.SetHandler(defHandler)
 
 	// load config
 	var config *Config
@@ -28,15 +30,25 @@ func main() {
 		return
 	}
 
-	// logger handler
-	defHandler := clilog.Default
-	log.SetHandler(log.HandlerFunc(func(entry *log.Entry) error {
-		// catch errors
-		if entry.Level == log.ErrorLevel {
-			fmt.Println("[LOG] Catched error:", entry.Message)
+	// load sentry
+	if config.SentryDSN != "" {
+		log.Info("Using Sentry")
+		if err := sentry.Init(sentry.ClientOptions{
+			Dsn: config.SentryDSN,
+		}); err != nil {
+			log.WithError(err).Error("error initializing sentry")
+			return
 		}
-		return defHandler.HandleLog(entry)
-	}))
+		defer sentry.Flush(2 * time.Second)
+
+		// catch errors and send 'em to sentry
+		log.SetHandler(log.HandlerFunc(func(entry *log.Entry) error {
+			if entry.Level == log.ErrorLevel {
+				sentry.CaptureException(fmt.Errorf(entry.Message))
+			}
+			return defHandler.HandleLog(entry)
+		}))
+	}
 
 	// Database
 	log.Info("Connecting to Database ...")
@@ -92,6 +104,7 @@ func main() {
 				// meta data
 				var msg *Message
 				if msg, err = ParseIRCMessage(message); err != nil {
+					log.WithError(err).Error("error parsing message")
 					return
 				}
 				tx := db.Create(msg)
