@@ -1,1 +1,4 @@
 /settings.toml
+/data/postgres/pgdata
+/.idea
+*.iml

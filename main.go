@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/apex/log"
 	clilog "github.com/apex/log/handlers/cli"
 	"gopkg.in/irc.v3"
@@ -10,32 +11,24 @@ import (
 	"net"
 )
 
-const (
-	anonymousUser = "justinfan30316"
-)
-
-// Database
-const (
-	PostgresHost = "localhost"
-	PostgresUser = "postgres"
-	PostgresPass = "123456"
-	PostgresDb   = "postgres"
-	PostgresPort = "45433"
-	PostgresTZ   = "Europe/Berlin"
-)
-
-func softPanic(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 ///
 
 func main() {
 	// Apex Logger CLI Handler
 	log.SetHandler(clilog.Default)
 
+	// load config
+	var config *Config
+	if _, err := toml.DecodeFile("settings.toml", &config); err != nil {
+		log.WithError(err).Error("error loading config")
+		return
+	}
+	if config == nil {
+		log.Error("config was null")
+		return
+	}
+
+	// logger handler
 	defHandler := clilog.Default
 	log.SetHandler(log.HandlerFunc(func(entry *log.Entry) error {
 		// catch errors
@@ -49,7 +42,7 @@ func main() {
 	log.Info("Connecting to Database ...")
 	db, err := gorm.Open(postgres.Open(fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=%s",
-		PostgresHost, PostgresUser, PostgresPass, PostgresDb, PostgresPort, PostgresTZ,
+		config.PostgresHost, config.PostgresUser, config.PostgresPass, config.PostgresDb, config.PostgresPort, config.PostgresTZ,
 	)))
 
 	if err != nil {
@@ -77,19 +70,24 @@ func main() {
 	}
 
 	log.Info("Connected. Building IRC Client ...")
-	config := irc.ClientConfig{
-		Nick: anonymousUser,
-		User: anonymousUser,
-		Name: anonymousUser,
+	ic := irc.ClientConfig{
+		Nick: config.TwitchNick,
+		User: config.TwitchUser,
+		Name: config.TwitchName,
+		Pass: config.TwitchPass,
 		Handler: irc.HandlerFunc(func(client *irc.Client, message *irc.Message) {
 			if message.Command == "001" {
 				// use the Tags feature
 				// https://dev.twitch.tv/docs/irc/guide/#twitch-irc-capabilities
-				softPanic(client.Write("CAP REQ :twitch.tv/tags"))
+				if err = client.Write("CAP REQ :twitch.tv/tags"); err != nil {
+					log.WithError(err).Error("error requesting tags")
+				}
 
 				// join channels
 				// TODO: Join channels
-				softPanic(client.Write("JOIN #unsympathisch_tv"))
+				if err = client.Write("JOIN #unsympathisch_tv"); err != nil {
+					log.WithError(err).Error("error joining channel")
+				}
 			} else if message.Command == "PRIVMSG" {
 				// meta data
 				var msg *Message
@@ -105,7 +103,7 @@ func main() {
 			}
 		}),
 	}
-	client := irc.NewClient(conn, config)
+	client := irc.NewClient(conn, ic)
 	if err = client.Run(); err != nil {
 		panic(err)
 	}

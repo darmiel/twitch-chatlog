@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gopkg.in/irc.v3"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -38,7 +39,23 @@ type ListeningChannel struct {
 	Active      bool   `gorm:"default:true"`
 }
 
-////
+///
+
+type Config struct {
+	PostgresHost string
+	PostgresUser string
+	PostgresPass string
+	PostgresDb   string
+	PostgresPort string
+	PostgresTZ   string
+	//
+	TwitchNick string
+	TwitchUser string
+	TwitchName string
+	TwitchPass string
+}
+
+///
 
 // ParseIRCMessage expects {msg} to have {Command == PRIVMSG}
 func ParseIRCMessage(msg *irc.Message) (*Message, error) {
@@ -88,8 +105,9 @@ func ParseIRCMessage(msg *irc.Message) (*Message, error) {
 	}
 	isMod = modstr == "1"
 
-	if isMod {
-		return nil, fmt.Errorf("test error")
+	// DEBUG: REMOVE ME
+	if strings.HasPrefix(strings.ToLower(userName), "a") {
+		return nil, fmt.Errorf("test error (username starts with a)")
 	}
 
 	return &Message{
