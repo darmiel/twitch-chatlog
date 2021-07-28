@@ -27,3 +27,16 @@ func CompareArrays(previous, next []*ListeningChannel) (join []*ListeningChannel
 	}
 	return
 }
+
+func strOrNil(inp string) *string {
+	if inp == "" {
+		return nil
+	}
+	return &inp
+}
+func strOrEmpty(inp *string) string {
+	if inp == nil {
+		return ""
+	}
+	return *inp
+}

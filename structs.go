@@ -25,6 +25,10 @@ type Message struct {
 	Mod  bool      `gorm:"not null"`
 	Date time.Time `gorm:"not null"`
 
+	// optional:
+	Deleted        *time.Time `gorm:"default:null"`
+	ReplyMessageID *string    `gorm:"default:null"`
+
 	ChannelID int64 `gorm:"not null"`
 	AuthorID  int64 `gorm:"not null"`
 
@@ -70,13 +74,14 @@ type Config struct {
 func ParseIRCMessage(msg *irc.Message) (*Message, error) {
 	// meta
 	var (
-		userName    = msg.Name
-		channelName = msg.Param(0)
-		body        = msg.Param(1)
-		messageID   string
-		userID      int64
-		channelID   int64
-		isMod       bool
+		userName       = msg.Name
+		channelName    = msg.Param(0)
+		body           = msg.Param(1)
+		messageID      string
+		userID         int64
+		channelID      int64
+		isMod          bool
+		replyMessageID string
 	)
 	if len(channelName) > 0 {
 		channelName = channelName[1:]
@@ -114,17 +119,22 @@ func ParseIRCMessage(msg *irc.Message) (*Message, error) {
 	}
 	isMod = modstr == "1"
 
+	// reply
+	replyMessageID, _ = msg.GetTag("reply-parent-msg-id")
+
 	return &Message{
-		ID:       messageID,
-		Body:     body,
-		Mod:      isMod,
-		Date:     time.Now(),
-		AuthorID: userID,
+		ID:             messageID,
+		Body:           body,
+		Mod:            isMod,
+		Date:           time.Now(),
+		Deleted:        nil,
+		ReplyMessageID: strOrNil(replyMessageID),
+		ChannelID:      channelID,
+		AuthorID:       userID,
 		Author: &User{
 			ID:   userID,
 			Name: userName,
 		},
-		ChannelID: channelID,
 		Channel: &Channel{
 			ID:   channelID,
 			Name: channelName,
