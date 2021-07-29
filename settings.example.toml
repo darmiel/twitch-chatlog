@@ -11,3 +11,5 @@ TwitchName = "justinfan30316"
 TwitchPass = "justinfan30316"
 
 SentryDSN = ""
+
+WebBind = ":30001" # used for ping

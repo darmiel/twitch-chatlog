@@ -66,6 +66,7 @@ type Config struct {
 	TwitchPass string
 	//
 	SentryDSN string
+	WebBind   string
 }
 
 ///

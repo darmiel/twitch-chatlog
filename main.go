@@ -11,6 +11,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"net"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -19,6 +21,12 @@ var (
 	currentChannels   []*ListeningChannel
 	currentChannelsMu sync.Mutex
 	checkingMu        sync.Mutex
+)
+
+// ping
+var (
+	lastIncomingMessage time.Time
+	lastDeletedMessage  time.Time
 )
 
 func joinChannel(client *irc.Client, channel *ListeningChannel) {
@@ -178,6 +186,7 @@ func main() {
 				}
 				log.WithField("rows affected", tx.RowsAffected).
 					Debugf("💾 %s", msg.String())
+				lastIncomingMessage = time.Now()
 			} else if message.Command == "CLEARMSG" {
 				/// ============================================
 				/// CLEARMSG
@@ -202,11 +211,13 @@ func main() {
 				log.WithField("rows affected", tx.RowsAffected).
 					WithField("target message", target).
 					Debug("Updated message (delete)")
+				lastDeletedMessage = time.Now()
 			}
 		}),
 	}
 	client := irc.NewClient(conn, ic)
 
+	// 10s checker
 	go func() {
 		for {
 			time.Sleep(10 * time.Second)
@@ -216,6 +227,23 @@ func main() {
 			checkingMu.Unlock()
 		}
 	}()
+
+	// web server
+	if config.WebBind != "" {
+		time.Sleep(time.Second)
+		http.HandleFunc("/ping", func(writer http.ResponseWriter, request *http.Request) {
+			_, _ = fmt.Fprintf(writer,
+				"Pong! Last incoming message: %v, last deleted message: %v",
+				lastIncomingMessage, lastDeletedMessage)
+		})
+		go func() {
+			if err := http.ListenAndServe(config.WebBind, nil); err != nil {
+				log.WithError(err).Error("failed listening and serving")
+				os.Exit(1)
+				return
+			}
+		}()
+	}
 
 	if err = client.Run(); err != nil {
 		log.WithError(err).Error("error running client")
