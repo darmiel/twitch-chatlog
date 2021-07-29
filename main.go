@@ -106,7 +106,7 @@ func main() {
 		// catch errors and send 'em to sentry
 		log.SetHandler(log.HandlerFunc(func(entry *log.Entry) error {
 			if entry.Level == log.ErrorLevel {
-				sentry.CaptureException(fmt.Errorf(entry.Message))
+				sentry.CaptureException(fmt.Errorf("[%s]: (%v)", entry.Message, entry.Fields))
 			}
 			return clilog.Default.HandleLog(entry)
 		}))
