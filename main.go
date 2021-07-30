@@ -51,7 +51,11 @@ func leaveChannel(client *irc.Client, channel *ListeningChannel) {
 	}
 }
 
-func checkAndJoinLeave(db *gorm.DB, client *irc.Client) {
+func checkAndJoinLeave(db *gorm.DB, client **irc.Client) {
+	if client == nil {
+		return
+	}
+
 	currentChannelsMu.Lock()
 	defer currentChannelsMu.Unlock()
 
@@ -74,11 +78,11 @@ func checkAndJoinLeave(db *gorm.DB, client *irc.Client) {
 	log.Debugf("Join/Leave delay set to %v to prevent getting flood rated", delay)
 
 	for _, j := range join {
-		joinChannel(client, j)
+		joinChannel(*client, j)
 		time.Sleep(delay)
 	}
 	for _, l := range leave {
-		leaveChannel(client, l)
+		leaveChannel(*client, l)
 		time.Sleep(delay)
 	}
 
@@ -144,14 +148,26 @@ func main() {
 		return
 	}
 
-	log.Info("Connecting to IRC ...")
-	conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
-	if err != nil {
-		log.WithError(err).Error("connection to IRC failed")
-		return
+	// web server
+	if config.WebBind != "" {
+		log.Infof("Spinning up web server at %s/ping", config.WebBind)
+
+		time.Sleep(time.Second)
+		http.HandleFunc("/ping", func(writer http.ResponseWriter, request *http.Request) {
+			_, _ = fmt.Fprintf(writer,
+				"Pong! Last incoming message: %v, last deleted message: %v",
+				lastIncomingMessage, lastDeletedMessage)
+		})
+		go func() {
+			if err := http.ListenAndServe(config.WebBind, nil); err != nil {
+				log.WithError(err).Error("failed listening and serving")
+				os.Exit(1)
+				return
+			}
+		}()
 	}
 
-	log.Info("Connected. Building IRC Client ...")
+	// IRC Handler
 	ic := irc.ClientConfig{
 		Nick: config.TwitchNick,
 		User: config.TwitchUser,
@@ -167,7 +183,7 @@ func main() {
 
 				// Join new channels
 				checkingMu.Lock()
-				checkAndJoinLeave(db, client)
+				checkAndJoinLeave(db, &client)
 				checkingMu.Unlock()
 			} else if message.Command == "PRIVMSG" {
 				/// ===========================
@@ -215,37 +231,36 @@ func main() {
 			}
 		}),
 	}
-	client := irc.NewClient(conn, ic)
 
 	// 10s checker
+	var client *irc.Client
 	go func() {
 		for {
 			time.Sleep(10 * time.Second)
 			checkingMu.Lock()
 			log.Debug("Checking for new channels to listen")
-			checkAndJoinLeave(db, client)
+			checkAndJoinLeave(db, &client)
 			checkingMu.Unlock()
 		}
 	}()
 
-	// web server
-	if config.WebBind != "" {
-		time.Sleep(time.Second)
-		http.HandleFunc("/ping", func(writer http.ResponseWriter, request *http.Request) {
-			_, _ = fmt.Fprintf(writer,
-				"Pong! Last incoming message: %v, last deleted message: %v",
-				lastIncomingMessage, lastDeletedMessage)
-		})
-		go func() {
-			if err := http.ListenAndServe(config.WebBind, nil); err != nil {
-				log.WithError(err).Error("failed listening and serving")
-				os.Exit(1)
-				return
-			}
-		}()
-	}
+	var tries int
+	for {
+		log.Info("Connecting to IRC ...")
+		conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
+		if err != nil {
+			tries++
+			log.WithError(err).Errorf("connection to IRC failed. Waiting %v seconds before retrying", tries*2)
+			time.Sleep(time.Second * time.Duration(tries*2))
+			continue
+		}
+		tries = 0
 
-	if err = client.Run(); err != nil {
-		log.WithError(err).Error("error running client")
+		log.Info("Connected. Building IRC Client ...")
+		client = irc.NewClient(conn, ic)
+
+		if err = client.Run(); err != nil {
+			log.WithError(err).Error("error running client")
+		}
 	}
 }
