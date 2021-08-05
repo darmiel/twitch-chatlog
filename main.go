@@ -167,6 +167,19 @@ func main() {
 		}()
 	}
 
+	initClient := func(client *irc.Client) {
+		// use the Tags feature
+		// https://dev.twitch.tv/docs/irc/guide/#twitch-irc-capabilities
+		if err = client.Write("CAP REQ :twitch.tv/tags twitch.tv/commands"); err != nil {
+			log.WithError(err).Error("error requesting tags and commands")
+		}
+
+		// Join new channels
+		checkingMu.Lock()
+		checkAndJoinLeave(db, &client)
+		checkingMu.Unlock()
+	}
+
 	// IRC Handler
 	ic := irc.ClientConfig{
 		Nick: config.TwitchNick,
@@ -175,16 +188,7 @@ func main() {
 		Pass: config.TwitchPass,
 		Handler: irc.HandlerFunc(func(client *irc.Client, message *irc.Message) {
 			if message.Command == "001" {
-				// use the Tags feature
-				// https://dev.twitch.tv/docs/irc/guide/#twitch-irc-capabilities
-				if err = client.Write("CAP REQ :twitch.tv/tags twitch.tv/commands"); err != nil {
-					log.WithError(err).Error("error requesting tags and commands")
-				}
-
-				// Join new channels
-				checkingMu.Lock()
-				checkAndJoinLeave(db, &client)
-				checkingMu.Unlock()
+				initClient(client)
 			} else if message.Command == "PRIVMSG" {
 				/// ===========================
 				/// PRIVMSG
@@ -244,23 +248,17 @@ func main() {
 		}
 	}()
 
-	var tries int
-	for {
-		log.Info("Connecting to IRC ...")
-		conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
-		if err != nil {
-			tries++
-			log.WithError(err).Errorf("connection to IRC failed. Waiting %v seconds before retrying", tries*2)
-			time.Sleep(time.Second * time.Duration(tries*2))
-			continue
-		}
-		tries = 0
+	log.Info("Connecting to IRC ...")
+	conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
+	if err != nil {
+		log.WithError(err).Errorf("connection to IRC failed.")
+		return
+	}
 
-		log.Info("Connected. Building IRC Client ...")
-		client = irc.NewClient(conn, ic)
+	log.Info("Connected. Building IRC Client ...")
+	client = irc.NewClient(conn, ic)
 
-		if err = client.Run(); err != nil {
-			log.WithError(err).Error("error running client")
-		}
+	if err = client.Run(); err != nil {
+		log.WithError(err).Error("error running client")
 	}
 }
