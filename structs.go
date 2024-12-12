@@ -40,7 +40,7 @@ type Message struct {
 func (m *Message) String() string {
 	var mod string
 	if m.Mod {
-		mod = "🚨 "
+		mod = "👮 "
 	}
 	return fmt.Sprintf("(%s) %s[%s]: %s", m.Channel.Name, mod, m.Author.Name, m.Body)
 }
@@ -53,20 +53,14 @@ type ListeningChannel struct {
 ///
 
 type Config struct {
-	PostgresHost string
-	PostgresUser string
-	PostgresPass string
-	PostgresDb   string
-	PostgresPort string
-	PostgresTZ   string
+	PostgresDSN string `koanf:"postgres_dsn"`
 	//
-	TwitchNick string
-	TwitchUser string
-	TwitchName string
-	TwitchPass string
+	TwitchNick string `koanf:"twitch_nick"`
+	TwitchUser string `koanf:"twitch_user"`
+	TwitchName string `koanf:"twitch_name"`
+	TwitchPass string `koanf:"twitch_pass"`
 	//
-	SentryDSN string
-	WebBind   string
+	WebBind string `koanf:"web_bind"`
 }
 
 ///
@@ -90,35 +84,35 @@ func ParseIRCMessage(msg *irc.Message) (*Message, error) {
 
 	// auxiliary
 	var (
-		useridstr    string
-		channelidstr string
-		modstr       string
+		userIDStr    string
+		channelIDStr string
+		modStr       string
 		ok           bool
 		err          error
 	)
 
-	if useridstr, ok = msg.GetTag("user-id"); !ok {
+	if userIDStr, ok = msg.GetTag("user-id"); !ok {
 		return nil, fmt.Errorf("userid was empty for user %v", userName)
 	}
-	if userID, err = strconv.ParseInt(useridstr, 10, 64); err != nil {
-		return nil, fmt.Errorf("userid %v could not be converted to int64", useridstr)
+	if userID, err = strconv.ParseInt(userIDStr, 10, 64); err != nil {
+		return nil, fmt.Errorf("userid %v could not be converted to int64", userIDStr)
 	}
 
-	if channelidstr, ok = msg.GetTag("room-id"); !ok {
+	if channelIDStr, ok = msg.GetTag("room-id"); !ok {
 		return nil, fmt.Errorf("roomid was empty for channel %v", channelName)
 	}
-	if channelID, err = strconv.ParseInt(channelidstr, 10, 64); err != nil {
-		return nil, fmt.Errorf("roomid %v could not be converted to int64", channelidstr)
+	if channelID, err = strconv.ParseInt(channelIDStr, 10, 64); err != nil {
+		return nil, fmt.Errorf("roomid %v could not be converted to int64", channelIDStr)
 	}
 
 	if messageID, ok = msg.GetTag("id"); !ok {
 		return nil, fmt.Errorf("messageid was empty for body '%v' by %v", body, userName)
 	}
 
-	if modstr, ok = msg.GetTag("mod"); !ok {
+	if modStr, ok = msg.GetTag("mod"); !ok {
 		return nil, fmt.Errorf("mod was empty for body '%v' by %v", body, userName)
 	}
-	isMod = modstr == "1"
+	isMod = modStr == "1"
 
 	// reply
 	replyMessageID, _ = msg.GetTag("reply-parent-msg-id")

@@ -1,0 +1,25 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: twitch-chat-log-app
+    ports:
+      - "8080:30001"
+    depends_on:
+      - db
+    environment:
+      TC_POSTGRES_DSN: "host=db user=postgres password=123456 dbname=postgres sslmode=disable TimeZone=Europe/Berlin"
+    restart: always
+
+  db:
+    image: postgres:17
+    container_name: twitch-chat-log-pg
+    environment:
+      POSTGRES_PASSWORD: "123456"
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    #ports:
+    #  - "45433:5432"
+    restart: always

@@ -34,9 +34,3 @@ func strOrNil(inp string) *string {
 	}
 	return &inp
 }
-func strOrEmpty(inp *string) string {
-	if inp == nil {
-		return ""
-	}
-	return *inp
-}

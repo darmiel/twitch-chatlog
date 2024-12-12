@@ -1,15 +1,8 @@
-PostgresHost = "localhost"
-PostgresUser = "postgres"
-PostgresPass = "123456"
-PostgresDb = "postgres"
-PostgresPort = "45433"
-PostgresTZ = "Europe/Berlin"
+postgres_dsn = "host=localhost user=postgres password=123456 dbname=postgres port=45433 sslmode=disable TimeZone=Europe/Berlin"
 
-TwitchNick = "justinfan30316"
-TwitchUser = "justinfan30316"
-TwitchName = "justinfan30316"
-TwitchPass = "justinfan30316"
+twitch_nick = "justinfan30316"
+twitch_user = "justinfan30316"
+twitch_name = "justinfan30316"
+twitch_pass = "justinfan30316"
 
-SentryDSN = ""
-
-WebBind = ":30001" # used for ping
+web_bind = ":30001" # used for ping
